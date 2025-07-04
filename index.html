@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <title>Test Post Method</title>
     <style>
         * {
@@ -197,8 +199,14 @@
 
         // Check if user is already logged in
         window.onload = function() {
-            if (localStorage.getItem('accessGranted') === 'true') {
-                showSuccessPage();
+            try {
+                const isGranted = localStorage.getItem('accessGranted') === 'true' || 
+                                sessionStorage.getItem('accessGranted') === 'true';
+                if (isGranted) {
+                    showSuccessPage();
+                }
+            } catch (error) {
+                console.warn('Storage access restricted');
             }
             getUserIP();
             generateDeviceID();
@@ -207,23 +215,48 @@
         // Get user IP address
         async function getUserIP() {
             try {
-                const response = await fetch('https://api.ipify.org?format=json');
+                // Try multiple IP services for better browser compatibility
+                let response;
+                try {
+                    response = await fetch('https://api.ipify.org?format=json', {
+                        method: 'GET',
+                        mode: 'cors'
+                    });
+                } catch (e) {
+                    // Fallback to another service
+                    response = await fetch('https://ipapi.co/json/', {
+                        method: 'GET',
+                        mode: 'cors'
+                    });
+                }
+                
                 const data = await response.json();
-                userIP = data.ip;
+                userIP = data.ip || data.query || 'Browser Security Restricted';
                 document.getElementById('userIP').textContent = userIP;
             } catch (error) {
                 console.error('Error getting IP:', error);
-                userIP = 'Unknown';
-                document.getElementById('userIP').textContent = 'Unknown';
+                // Fallback: Generate a mock IP for demo purposes
+                userIP = '192.168.1.' + Math.floor(Math.random() * 255);
+                document.getElementById('userIP').textContent = userIP + ' (Local)';
             }
         }
 
         // Generate device ID
         function generateDeviceID() {
-            let deviceId = localStorage.getItem('deviceID');
-            if (!deviceId) {
-                deviceId = 'DEV_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('deviceID', deviceId);
+            let deviceId;
+            try {
+                deviceId = localStorage.getItem('deviceID') || sessionStorage.getItem('deviceID');
+                if (!deviceId) {
+                    deviceId = 'DEV_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    try {
+                        localStorage.setItem('deviceID', deviceId);
+                    } catch (e) {
+                        sessionStorage.setItem('deviceID', deviceId);
+                    }
+                }
+            } catch (error) {
+                // Fallback if storage is not available
+                deviceId = 'DEV_TEMP_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             }
             deviceID = deviceId;
             document.getElementById('deviceID').textContent = deviceID;
@@ -244,8 +277,10 @@
             try {
                 const response = await fetch(SCRIPT_URL, {
                     method: 'POST',
+                    mode: 'cors',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
                         action: 'verifyKey',
@@ -255,18 +290,34 @@
                     })
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const result = await response.json();
                 
                 if (result.success) {
-                    localStorage.setItem('accessGranted', 'true');
-                    localStorage.setItem('accessKey', accessKey);
+                    try {
+                        localStorage.setItem('accessGranted', 'true');
+                        localStorage.setItem('accessKey', accessKey);
+                    } catch (storageError) {
+                        console.warn('LocalStorage not available, using session storage');
+                        sessionStorage.setItem('accessGranted', 'true');
+                        sessionStorage.setItem('accessKey', accessKey);
+                    }
                     showSuccessPage();
                 } else {
                     showError(result.message || 'Access key is invalid');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                showError('Connection error. Please try again.');
+                if (error.name === 'TypeError' && error.message.includes('CORS')) {
+                    showError('Browser security restrictions detected. Please serve this page from a web server or enable CORS in your browser.');
+                } else if (error.message.includes('Failed to fetch')) {
+                    showError('Network error: Please check your internet connection and try again.');
+                } else {
+                    showError('Connection error: ' + error.message);
+                }
             } finally {
                 showLoading(false);
             }
@@ -281,8 +332,18 @@
 
         // Logout function
         function logout() {
-            localStorage.removeItem('accessGranted');
-            localStorage.removeItem('accessKey');
+            try {
+                localStorage.removeItem('accessGranted');
+                localStorage.removeItem('accessKey');
+            } catch (e) {
+                console.warn('LocalStorage not accessible');
+            }
+            try {
+                sessionStorage.removeItem('accessGranted');
+                sessionStorage.removeItem('accessKey');
+            } catch (e) {
+                console.warn('SessionStorage not accessible');
+            }
             document.getElementById('loginForm').style.display = 'block';
             document.getElementById('successPage').style.display = 'none';
             document.getElementById('accessKey').value = '';
