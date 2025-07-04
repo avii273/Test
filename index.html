@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Post Method</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .login-form {
+            text-align: center;
+        }
+
+        .success-page {
+            text-align: center;
+            display: none;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .success {
+            color: #27ae60;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .welcome-message {
+            color: #27ae60;
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+
+        .logout-btn {
+            background: #e74c3c;
+            margin-top: 20px;
+        }
+
+        .device-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .device-info h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .device-info p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Login Form -->
+        <div class="login-form" id="loginForm">
+            <h1>Test Post Method</h1>
+            <div class="input-group">
+                <label for="accessKey">Access Key:</label>
+                <input type="text" id="accessKey" placeholder="Enter your access key" required>
+            </div>
+            <button class="btn" id="verifyBtn" onclick="verifyAccessKey()">Verify Access</button>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Verifying access key...</p>
+            </div>
+            <div class="error" id="errorMessage"></div>
+        </div>
+
+        <!-- Success Page -->
+        <div class="success-page" id="successPage">
+            <h1>Access Granted!</h1>
+            <div class="welcome-message">
+                Hello Avii, Google Sheet POST method is really working...
+            </div>
+            <div class="device-info">
+                <h3>Session Information:</h3>
+                <p><strong>IP Address:</strong> <span id="userIP">Loading...</span></p>
+                <p><strong>Device ID:</strong> <span id="deviceID">Loading...</span></p>
+                <p><strong>Access Time:</strong> <span id="accessTime"></span></p>
+            </div>
+            <button class="btn logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <script>
+        // Replace with your Google Apps Script Web App URL
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxS4wYRAkl7r-BctohYdx3EXsTvXLvv0OF4Rw3QZdOLhjkMICN-YK2OesKf99U8QOy/exec';
+        
+        let userIP = '';
+        let deviceID = '';
+
+        // Check if user is already logged in
+        window.onload = function() {
+            if (localStorage.getItem('accessGranted') === 'true') {
+                showSuccessPage();
+            }
+            getUserIP();
+            generateDeviceID();
+        };
+
+        // Get user IP address
+        async function getUserIP() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                userIP = data.ip;
+                document.getElementById('userIP').textContent = userIP;
+            } catch (error) {
+                console.error('Error getting IP:', error);
+                userIP = 'Unknown';
+                document.getElementById('userIP').textContent = 'Unknown';
+            }
+        }
+
+        // Generate device ID
+        function generateDeviceID() {
+            let deviceId = localStorage.getItem('deviceID');
+            if (!deviceId) {
+                deviceId = 'DEV_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('deviceID', deviceId);
+            }
+            deviceID = deviceId;
+            document.getElementById('deviceID').textContent = deviceID;
+        }
+
+        // Verify access key
+        async function verifyAccessKey() {
+            const accessKey = document.getElementById('accessKey').value.trim();
+            
+            if (!accessKey) {
+                showError('Please enter an access key');
+                return;
+            }
+
+            showLoading(true);
+            clearMessages();
+
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'verifyKey',
+                        accessKey: accessKey,
+                        userIP: userIP,
+                        deviceID: deviceID
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    localStorage.setItem('accessGranted', 'true');
+                    localStorage.setItem('accessKey', accessKey);
+                    showSuccessPage();
+                } else {
+                    showError(result.message || 'Access key is invalid');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Connection error. Please try again.');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Show success page
+        function showSuccessPage() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('successPage').style.display = 'block';
+            document.getElementById('accessTime').textContent = new Date().toLocaleString();
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('accessGranted');
+            localStorage.removeItem('accessKey');
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('successPage').style.display = 'none';
+            document.getElementById('accessKey').value = '';
+            clearMessages();
+        }
+
+        // Show loading state
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('verifyBtn').disabled = show;
+        }
+
+        // Show error message
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        // Clear messages
+        function clearMessages() {
+            document.getElementById('errorMessage').textContent = '';
+        }
+
+        // Handle Enter key press
+        document.getElementById('accessKey').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                verifyAccessKey();
+            }
+        });
+    </script>
+</body>
+</html>
